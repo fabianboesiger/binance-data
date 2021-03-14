@@ -86,7 +86,9 @@ async fn main() {
             }
         },
         async move {
-            let pool = PgPool::connect(&std::env::var("DATABASE_URL").unwrap()).await.unwrap();
+	    let url = dotenv::var("DATABASE_URL").unwrap();
+            println!("{}", url);
+            let pool = PgPool::connect(&url).await.unwrap();
 
             let mut buffer = VecDeque::new();
 
