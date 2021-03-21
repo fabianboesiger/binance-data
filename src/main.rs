@@ -47,9 +47,13 @@ async fn main() {
                         "CHZUSDT",
                         "BNBUSDT",
                         "DOGEUSDT",
-                        "MANAUSDT",
+                        //"MANAUSDT",
                         "ADAUSDT",
-                        "BCHUSDT"
+                        "BCHUSDT",
+                        "XRPUSDT",
+                        "LTCUSDT",
+                        "EOSUSDT",
+                        "DOTUSDT"
                     ]
                         .iter()
                         .map(|symbol| Subscription::Trades(symbol.to_lowercase().to_string()))
