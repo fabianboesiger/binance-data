@@ -90,16 +90,16 @@ async fn main() {
             }
         },
         async move {
-            let pool = PgPool::connect(&std::env::var("DATABASE_URL").unwrap()).await.unwrap();
+	    let url = dotenv::var("DATABASE_URL").unwrap();
+            let pool = PgPool::connect(&url).await.unwrap();
 
             let mut buffer = VecDeque::new();
 
             while let Some(trade) = rx.recv().await {
-                println!("{:?}", trade);
                 buffer.push_back(trade);
 
                 if buffer.len() > 128 {
-                    let mut entries = "INSERT INTO trades VALUES ".to_owned();
+                    let mut entries = "INSERT INTO trades (market, quantity, price, timestamp) VALUES ".to_owned();
                     while let Some(Trade {
                             market,
                             quantity,
@@ -107,11 +107,11 @@ async fn main() {
                             timestamp,
                         }) = buffer.pop_front()
                     {
-                        entries += &format!("({}, {}, {}, {}), ", market, quantity, price, timestamp);
+                        entries += &format!("('{}', {}, {}, {}),", market, quantity, price, timestamp);
                     }
                     entries.pop();
                     entries.push(';');
-            
+            	    
                     sqlx::query(&entries).execute(&pool).await.unwrap();
                 }
             }
