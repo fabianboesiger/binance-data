@@ -1,4 +1,4 @@
-use futures::stream::StreamExt;
+use futures::stream::{BoxStream, StreamExt};
 use openlimits::{
     binance::{
         BinanceParameters,
@@ -9,13 +9,15 @@ use openlimits::{
         Side,
         websocket::{Subscription, WebSocketResponse, OpenLimitsWebSocketMessage}
     },
+    shared::Result,
 };
 use rust_decimal::prelude::*;
 use tokio::{
     sync::mpsc,
 };
 use sqlx::postgres::PgPool;
-use std::collections::VecDeque;
+use std::{collections::VecDeque, time::Duration};
+use tokio::time::{timeout, sleep};
 
 #[derive(Debug)]
 struct Trade {
@@ -35,62 +37,37 @@ async fn main() {
     tokio::join!(
         async move {
             loop {
-                let mut stream = OpenLimitsWs {
-                    websocket: BinanceWebsocket::new(BinanceParameters::prod())
-                        .await
-                        .expect("Failed to create Client"),
-                }
-                .create_stream(
-                    [
-                        "BTCUSDT",
-                        "ETHUSDT",
-                        "CHZUSDT",
-                        "BNBUSDT",
-                        "DOGEUSDT",
-                        //"MANAUSDT",
-                        "ADAUSDT",
-                        "BCHUSDT",
-                        "XRPUSDT",
-                        "LTCUSDT",
-                        "EOSUSDT",
-                        "DOTUSDT"
-                    ]
-                        .iter()
-                        .map(|symbol| Subscription::Trades(symbol.to_lowercase().to_string()))
-                        .collect::<Vec<Subscription>>()
-                        .as_slice()
-
-                )
-                .await
-                .expect("Couldn't create stream.");
-
-                while let Some(Ok(message)) = stream.next().await {
-                    match message {
-                        WebSocketResponse::Generic(OpenLimitsWebSocketMessage::Trades(trades)) => {
-                            for trade in trades {
-                                let market = trade.market_pair;
-                                let quantity = match trade.side {
-                                    Side::Buy => -trade.qty,
-                                    Side::Sell => trade.qty,
-                                };
-                                let price = trade.price;
-                                let timestamp = trade.created_at as i64;
-        
-                                tx.send(Trade {
-                                    market,
-                                    quantity,
-                                    price,
-                                    timestamp
-                                }).unwrap()
-                            }
-                        },
-                        _ => ()
+                if let Ok(mut stream) = connect_websocket().await {
+                    while let Ok(Some(Ok(message))) = timeout(Duration::from_secs(5), stream.next()).await {
+                        match message {
+                            WebSocketResponse::Generic(OpenLimitsWebSocketMessage::Trades(trades)) => {
+                                for trade in trades {
+                                    let market = trade.market_pair;
+                                    let quantity = match trade.side {
+                                        Side::Buy => -trade.qty,
+                                        Side::Sell => trade.qty,
+                                    };
+                                    let price = trade.price;
+                                    let timestamp = trade.created_at as i64;
+            
+                                    tx.send(Trade {
+                                        market,
+                                        quantity,
+                                        price,
+                                        timestamp
+                                    }).unwrap()
+                                }
+                            },
+                            _ => ()
+                        }
                     }
+                } else {
+                    sleep(Duration::from_secs(5)).await;
                 }
             }
         },
         async move {
-	    let url = dotenv::var("DATABASE_URL").unwrap();
+	        let url = dotenv::var("DATABASE_URL").unwrap();
             let pool = PgPool::connect(&url).await.unwrap();
 
             let mut buffer = VecDeque::new();
@@ -117,4 +94,41 @@ async fn main() {
             }
         }
     );
+}
+
+async fn connect_websocket() -> Result<
+    BoxStream<
+        'static,
+        Result<WebSocketResponse<<BinanceWebsocket as ExchangeWs>::Response>>,
+    >,
+> {
+    let subscriptions = [
+        "BTCUSDT",
+        "ETHUSDT",
+        "CHZUSDT",
+        "BNBUSDT",
+        "DOGEUSDT",
+        "ADAUSDT",
+        "BCHUSDT",
+        "XRPUSDT",
+        "LTCUSDT",
+        "EOSUSDT",
+        "DOTUSDT",
+        "THETAUSDT",
+        "LINKUSDT",
+    ];
+
+    let subscriptions = subscriptions
+        .iter()
+        .map(|symbol| Subscription::Trades(symbol.to_lowercase().to_string()))
+        .collect::<Vec<Subscription>>();
+
+    let stream = OpenLimitsWs {
+        websocket: BinanceWebsocket::new(BinanceParameters::prod())
+        .await?,
+    }
+    .create_stream(&subscriptions)
+    .await?;
+
+    Ok(stream)
 }
