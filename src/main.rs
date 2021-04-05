@@ -31,7 +31,6 @@ struct Trade {
 async fn main() {
     dotenv::dotenv().ok();
 
-
     let (tx, mut rx) = mpsc::unbounded_channel();
 
     tokio::join!(
