@@ -74,7 +74,7 @@ async fn main() {
             while let Some(trade) = rx.recv().await {
                 buffer.push_back(trade);
 
-                if buffer.len() > 128 {
+                if buffer.len() > 2048 {
                     let mut entries = "INSERT INTO trades (market, quantity, price, timestamp) VALUES ".to_owned();
                     while let Some(Trade {
                             market,
