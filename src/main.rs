@@ -120,6 +120,11 @@ async fn connect_websocket() -> Result<
         "BTTUSDT",
         "TRXUSDT",
         "VETUSDT",
+
+        "IOTAUSDT",
+        "ATOMUSDT",
+        "ETCUSDT",
+        "NEOUSDT",
     ];
 
     let subscriptions = subscriptions
